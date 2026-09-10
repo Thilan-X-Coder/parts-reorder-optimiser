@@ -1,7 +1,7 @@
 """Load, clean and aggregate the Online Retail II transaction file.
 
-Cleaning rules are derived from EDA in notebooks/01_eda.ipynb.
-Each rule has an observed reason, recorded in the docstrings below.
+Cleaning rules were derived from EDA in notebooks/01_eda.ipynb.
+Each rule's reason is recorded in the docstrings below.
 """
 
 import pandas as pd
@@ -18,8 +18,8 @@ def load_raw(path: str) -> pd.DataFrame:
 def normalise_codes(df: pd.DataFrame) -> pd.DataFrame:
     """Strip padding and force uppercase.
 
-    EDA found '47503J ' (trailing space) and 172 codes existing in both
-    cases, e.g. 85114B / 85114b, which split one product into two series.
+    EDA found '47503J ' with a trailing space, and 172 codes existing in
+    both cases (e.g. 85114B / 85114b) which split one product into two series.
     """
     out = df.copy()
     out["StockCode"] = out["StockCode"].astype(str).str.strip().str.upper()
@@ -27,7 +27,14 @@ def normalise_codes(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only rows representing real outbound demand for a stocked item."""
+    """Keep only rows representing real outbound demand for a stocked item.
+
+    Removes:
+      - non-product codes: POST, DOT, M, B, AMAZONFEE, GIFT_*, TEST*, DCGS*
+      - negative quantities: 19,493 cancellations + 3,457 warehouse write-offs
+      - zero/negative prices: 6,202 giveaways/damages + 5 bad-debt adjustments
+      - 34,335 exact duplicate rows
+    """
     out = normalise_codes(df).drop_duplicates()
 
     out = out[
@@ -41,15 +48,22 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def select_top_skus(df: pd.DataFrame, n: int) -> list:
-    """Top n SKUs by cleaned sales value. Must run AFTER clean()."""
+    """Top n SKUs by cleaned sales value. Must run AFTER clean().
+
+    Ranking before cleaning put DOT (postage) at rank 2 and POST at rank 8.
+    """
     value = df.groupby("StockCode")["line_value"].sum().sort_values(ascending=False)
     return value.head(n).index.tolist()
 
 
-def to_weekly(df: pd.DataFrame, skus: list) -> pd.DataFrame:
+def to_weekly(df: pd.DataFrame, skus: list, drop_edges: bool = True) -> pd.DataFrame:
     """SKU x week demand table with silent weeks filled as zero.
 
-    The zeros are the signal for ADI. A groupby alone would omit them.
+    The zeros are the signal for ADI. A plain groupby would omit them.
+
+    drop_edges removes the first and last week. The dataset starts on a
+    Tuesday and ends on a Friday, so those weeks have only 6 and 5 trading
+    days and cannot be fairly compared or scored against.
     """
     sub = df[df["StockCode"].isin(skus)].copy()
     sub["week"] = sub["InvoiceDate"].dt.to_period("W").dt.start_time
@@ -62,9 +76,15 @@ def to_weekly(df: pd.DataFrame, skus: list) -> pd.DataFrame:
     all_weeks = pd.date_range(sub["week"].min(), sub["week"].max(), freq="W-MON")
     grid = pd.MultiIndex.from_product([skus, all_weeks], names=["StockCode", "week"])
 
-    return (weekly.set_index(["StockCode", "week"])
-                  .reindex(grid, fill_value=0)
-                  .reset_index())
+    result = (weekly.set_index(["StockCode", "week"])
+                    .reindex(grid, fill_value=0)
+                    .reset_index())
+
+    if drop_edges:
+        keep = sorted(result["week"].unique())[1:-1]
+        result = result[result["week"].isin(keep)].reset_index(drop=True)
+
+    return result
 
 
 def build(config: dict) -> pd.DataFrame:
@@ -81,7 +101,7 @@ def build(config: dict) -> pd.DataFrame:
              / cleaned["line_value"].sum())
     print(f"Scope               : top {len(skus)} SKUs = {share:.1%} of value")
 
-    weekly = to_weekly(cleaned, skus)
+    weekly = to_weekly(cleaned, skus, config["scope"]["drop_partial_edge_weeks"])
     print(f"Weekly table        : {weekly.shape[0]:,} rows "
           f"({weekly['StockCode'].nunique()} SKUs x {weekly['week'].nunique()} weeks)")
     print(f"Zero-demand weeks   : {(weekly['demand'] == 0).mean():.1%}")

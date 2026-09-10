@@ -1,3 +1,5 @@
+"""Build the weekly demand table from the raw transaction file."""
+
 import yaml
 import src.data as data
 

@@ -2,11 +2,17 @@ data:
   raw_path: "data/raw/online_retail_II.csv"
   weekly_path: "data/processed/weekly_demand.parquet"
   patterns_path: "data/processed/sku_patterns.csv"
+  features_path: "data/processed/features.csv"
 
 scope:
   top_n_skus: 500
+  drop_partial_edge_weeks: true
 
 inventory:
   lead_time_weeks: 8
   service_level: 0.95
   holding_cost_rate: 0.20
+
+
+split:
+  train_end: "2011-03-31"

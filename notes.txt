@@ -1,0 +1,17 @@
+Gross demand is used, so a cancelled bulk order of 80,995 units on the final day remains in the raw series. It falls in the dropped partial final week. A production version would match C-invoices to their originals.
+
+
+ADI in one line
+ADI = weeks the product was alive ÷ weeks it actually sold
+eg:-
+Sold in 52 of 104 weeks → ADI = 2.0 → "a sale happens every 2 weeks on average."
+
+
+CV² in one line
+
+Look only at weeks with a sale.
+
+CV  = standard deviation ÷ mean
+CV² = CV × CV
+
+Sales of 10, 11, 9, 10, 12 → tiny CV². Sales of 5, 300, 8, 250 → huge CV².
