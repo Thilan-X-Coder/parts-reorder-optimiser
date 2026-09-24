@@ -1,6 +1,6 @@
 import yaml
 import pandas as pd
-import src.slpit as split
+import src.split as split
 import src.baseline as baseline
 
 with open("config.yaml") as f:
